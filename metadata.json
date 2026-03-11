@@ -1,0 +1,5 @@
+{
+  "name": "UJC Community App",
+  "description": "A community dashboard app for the United Jewish Campaign, featuring events, donations, directory, and profile management.",
+  "requestFramePermissions": []
+}
