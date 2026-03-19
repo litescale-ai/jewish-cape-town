@@ -71,7 +71,7 @@ eas build --platform android --profile preview --local
 
 ---
 
-## Installing on Your iPhone
+## Installing on Your iPhone	
 
 ### Option A: Via Finder (macOS)
 

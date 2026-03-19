@@ -30,6 +30,15 @@
     "scheme": "jewish-cape-town",
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "68fba78a-3fe0-4f6b-8bea-09a8308c9a0d"
+      }
+    },
+    "owner": "ephraimm"
   }
 }
