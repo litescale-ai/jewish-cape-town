@@ -1,0 +1,130 @@
+name: Build Mobile Apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        type: choice
+        options:
+          - ios
+          - android
+          - all
+        default: 'all'
+      profile:
+        description: 'Build profile'
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+        default: 'preview'
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: mobile-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Android Build ────────────────────────────────────────────
+  build-android:
+    if: ${{ inputs.platform == 'android' || inputs.platform == 'all' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android
+        run: eas build --platform android --profile ${{ inputs.profile }} --local --output ./build/android-app.${{ inputs.profile == 'production' && 'aab' || 'apk' }} --non-interactive
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ inputs.profile }}-${{ github.sha }}
+          path: ./build/android-app.*
+          retention-days: 14
+
+  # ─── iOS Build ────────────────────────────────────────────────
+  build-ios:
+    if: ${{ inputs.platform == 'ios' || inputs.platform == 'all' }}
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Build iOS
+        env:
+          # Apple credentials for code signing
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+          # Signing via Expo credentials manager
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: eas build --platform ios --profile ${{ inputs.profile }} --local --output ./build/jewish-cape-town.ipa --non-interactive
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-${{ inputs.profile }}-${{ github.sha }}
+          path: ./build/*.ipa
+          retention-days: 14
+
+  # ─── Summary ──────────────────────────────────────────────────
+  summary:
+    if: always()
+    needs: [build-android, build-ios]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Summary
+        run: |
+          echo "## 📱 Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Profile | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Android | ${{ inputs.profile }} | ${{ needs.build-android.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| iOS | ${{ inputs.profile }} | ${{ needs.build-ios.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📥 Download artifacts from the **Artifacts** section below." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### iOS Testing" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the \`.ipa\` artifact" >> $GITHUB_STEP_SUMMARY
+          echo "2. Install via Apple Configurator, Finder, or \`ideviceinstaller\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Your device UDID must be registered in your Apple Developer provisioning profile" >> $GITHUB_STEP_SUMMARY
